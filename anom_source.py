@@ -1,40 +1,58 @@
 import matplotlib.pyplot as plt
 import numpy as np
-from scipy.stats import norm
-import pandas as pd
 from stream import Stream
+from scipy.stats import norm
+from copy import deepcopy
 
-def make_observed(time, hertz, background_mean, source_intensity, source_std):
-    domain = np.arange(0, time, hertz)
-    background = np.random.poisson(background_mean, int(time / hertz))
-    source_std = hertz * source_std
-    source = norm(time // 2, source_std).pdf(domain)
-    source /= source.max()
-    source *= background_mean * source_intensity
-    observed = source + background
-    return observed
+
+class ObservedSignal:
+    """
+    Create an observed signal
+    """
+
+    def __init__(self, time, hertz, background_mean=10,
+                 background_type="poisson"):
+        self.time = time
+        self.hertz = hertz
+        self.domain = np.arange(0, time, hertz)
+
+        self.background_mean = background_mean
+        self.background_type = background_type
+        self.background = self._make_background()
+
+        self.observed = deepcopy(self.background).astype(float)
+
+    def _make_background(self):
+        if self.background_type=="poisson":
+            background = np.random.poisson(
+                self.background_mean, int(time / hertz)
+            )
+            return background
+
+    def add_source(self, location, intensity, std):
+        source = norm(int(time * location), std).pdf(self.domain)
+        source /= source.max()
+        source *= self.background_mean * intensity
+        self.observed += source
+    
+    def view(self):
+        plt.plot(self.domain, self.observed)
+        plt.show()
+
 
 hertz = 1
 time = 1000
-background_mean = 10
-source_intensity = .5
-source_std = 10
 
-observed = make_observed(
-    time=time, 
-    hertz=hertz, 
-    background_mean=background_mean, 
-    source_intensity=source_intensity, 
-    source_std=source_std
-)
+observedSignal = ObservedSignal(time, hertz)
 
-plt.plot(observed)
-plt.show()
+observedSignal.add_source(.2, 1, 10)
+observedSignal.add_source(.5, 1, 10)
+observedSignal.add_source(.9, 1, 10)
 
-stream = Stream(p_val_thresh=.05, alarm_when=15)
-stream.run(observed)
+observedSignal.view()
 
-stream.alarms
+stream = Stream(p_val_thresh=.01, alarm_when=15)
+stream.run(observedSignal.observed)
 
 plt.plot(stream.all_p_values_time, stream.all_p_values)
 try:
@@ -45,5 +63,5 @@ try:
     )
 except Exception as e:
     print(e)
-plt.plot(observed)
+plt.plot(observedSignal.observed)
 plt.show()
